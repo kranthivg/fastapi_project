@@ -1,31 +1,31 @@
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from .database import Base
-from sqlalchemy import Column,Integer,String,Boolean,ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql.sqltypes import TIMESTAMP
-from sqlalchemy.sql.expression import text
 
-class Post(Base):
-    __tablename__='posts'
-
-    id=Column(Integer,primary_key=True,nullable=False)
-    title=Column(String,nullable=False)
-    content=Column(String,nullable=False)
-    published=Column(Boolean,server_default='TRUE',nullable=False)
-    created=Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
-    owner_id=Column(Integer,ForeignKey("users.id",ondelete="CASCADE"),nullable=False)
-
-    owner=relationship('User')
 
 class User(Base):
-    __tablename__="users"
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String, unique=True)
+    password: Mapped[str] = mapped_column(String)
+    created: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    id=Column(Integer,primary_key=True,nullable=False)
-    email=Column(String,nullable=False,unique=True)
-    password=Column(String,nullable=False)
-    created=Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
+
+class Post(Base):
+    __tablename__ = "posts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String)
+    content: Mapped[str] = mapped_column(String)
+    published: Mapped[bool] = mapped_column(Boolean, server_default="true")
+    created: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    owner: Mapped[User] = relationship(lazy="joined")
+
 
 class Vote(Base):
-    __tablename__='votes'
-
-    user_id=Column(Integer,ForeignKey('users.id',ondelete='CASCADE'),primary_key=True)
-    post_id=Column(Integer,ForeignKey('posts.id',ondelete='CASCADE'),primary_key=True)
+    __tablename__ = "votes"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True)

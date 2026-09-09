@@ -1,47 +1,38 @@
-from jose import JWTError,jwt
-from datetime import datetime,timedelta
-from . import schemas,database,models
-from fastapi import Depends,HTTPException,status
+from datetime import UTC, datetime, timedelta
+
+import jwt
+from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+
+from . import database, models
 from .config import settings
 
-oauth2_scheme=OAuth2PasswordBearer(tokenUrl='login')
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-# Secret_Key
-# Algorithm
-# Expiration Time
 
-SECRET_KEY=settings.secret_key
-ALGORITHM = settings.algorithm
-ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
-
-def create_access_token(data:dict):
-    to_encode=data.copy()
-    expire=datetime.utcnow()+timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp":expire})
-
-    encoded_jwt=jwt.encode(to_encode,SECRET_KEY,algorithm=ALGORITHM)
-
-    return encoded_jwt
-
-def verify_access_token(token:str,credentials_exception):
-    try:
-        payload=jwt.decode(token,SECRET_KEY,algorithms=[ALGORITHM])
-        id:str=payload.get("user_id")
-        if not id:
-            raise credentials_exception
-        token_data=schemas.TokenData(id=id)
-    except JWTError:
-        raise credentials_exception
-    
-    return token_data
-
-def get_current_user(token:str=Depends(oauth2_scheme),db:Session=Depends(database.get_db)):
-    credentials_exception=HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-    detail=f'Could not validate credentials', headers={'WWW-Authenticate':'Bearer'}
+def create_access_token(data: dict):
+    now = datetime.now(UTC)
+    return jwt.encode(
+        {
+            "sub": str(data["user_id"]),
+            "iat": now,
+            "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
+        },
+        settings.secret_key,
+        algorithm="HS256",
     )
-    token_data=verify_access_token(token,credentials_exception)
-    user=db.query(models.User).filter(models.User.id==token_data.id).first()
 
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
+    error = HTTPException(401, "Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
+    try:
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=["HS256"], options={"require": ["sub", "exp", "iat"]}
+        )
+        user = db.get(models.User, int(payload["sub"]))
+    except (jwt.InvalidTokenError, ValueError, TypeError):
+        raise error from None
+    if user is None:
+        raise error
     return user

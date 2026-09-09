@@ -1,34 +1,38 @@
-from fastapi import  FastAPI
-from . import models
-from .database import engine
-from .routers import post,user,auth,vote
-from .config import Settings
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
+from .config import settings
+from .database import get_db
+from .routers import auth, post, user, vote
 
-#models.Base.metadata.create_all(bind=engine)
-
-app = FastAPI()
-origins=['*']
-
+app = FastAPI(
+    title="FastAPI Studio — Social API",
+    version="2.0.0",
+    description="Accounts, posts and voting. Drafts are visible only to their author.",
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+for router in (post.router, user.router, auth.router, vote.router):
+    app.include_router(router)
 
-app.include_router(post.router)
-app.include_router(user.router)
-app.include_router(auth.router)
-app.include_router(vote.router)
 
 @app.get("/")
 def root():
-    return {"message": "Welcome To my API!!"}
+    return {"message": "FastAPI Studio", "version": "2.0.0", "docs": "/docs"}
 
 
-
-
-
+@app.get("/health", tags=["System"])
+def health(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        raise HTTPException(503, "Database unavailable") from None
+    return {"status": "ok", "runtime": "FastAPI", "version": "2.0.0"}

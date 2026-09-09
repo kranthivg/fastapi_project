@@ -1,32 +1,33 @@
-from .. import schemas,utils,models
-from fastapi import status, HTTPException, Depends,APIRouter
-from ..database import get_db
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-router=APIRouter(
-    prefix="/users",
-    tags=['Users']
-)
+from .. import models, oauth2, schemas, utils
+from ..database import get_db
 
-@router.post("/",status_code=status.HTTP_201_CREATED,response_model=schemas.UserOut)
-def create_user(user:schemas.UserCreate,db: Session=Depends(get_db)):
-    # Hash the password
-    hashed_password=utils.hash(user.password)
-    user.password=hashed_password
+router = APIRouter(prefix="/users", tags=["Users"])
 
 
-    new_user=models.User(**user.dict())
+@router.post("/", status_code=201, response_model=schemas.UserOut)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    new_user = models.User(email=str(user.email).lower(), password=utils.hash(user.password))
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Email already registered") from None
     db.refresh(new_user)
     return new_user
 
-@router.get('/{id}',response_model=schemas.UserOut)
-def get_user(id:int,db: Session=Depends(get_db)):
-    user=db.query(models.User).filter(models.User.id==id).first()
 
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"User with id: {id} does not exist")
-    
+@router.get("/me", response_model=schemas.UserOut)
+def me(user: models.User = Depends(oauth2.get_current_user)):
+    return user
+
+
+@router.get("/{id}", response_model=schemas.UserOut)
+def get_user(id: int, user: models.User = Depends(oauth2.get_current_user)):
+    if id != user.id:
+        raise HTTPException(403, "You can only view your own account")
     return user
