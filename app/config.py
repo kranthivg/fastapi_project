@@ -1,15 +1,13 @@
-from pydantic import BaseSettings
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
-    database_hostname:str
-    database_port:str
-    database_password:str
-    database_name:str
-    database_username:str
-    secret_key:str
-    algorithm:str
-    access_token_expire_minutes:int
-    class Config:
-        env_file='.env'
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    database_url: str = "sqlite:///./studio.db"
+    secret_key: str = Field(min_length=32)
+    access_token_expire_minutes: int = Field(default=30, ge=1, le=1440)
+    cors_origins: list[str] = ["http://localhost:3000"]
 
-settings=Settings()
+
+settings = Settings()

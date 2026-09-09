@@ -1,35 +1,28 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-# import psycopg2
-# from psycopg2.extras import RealDictCursor
-# import time
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 from .config import settings
 
-SQLALCHEMY_DATABASE_URL=f'postgresql://{settings.database_username}:{settings.database_password}@{settings.database_hostname}:{settings.database_port}/{settings.database_name}'
 
-engine=create_engine(SQLALCHEMY_DATABASE_URL)
+class Base(DeclarativeBase):
+    pass
 
-SessionLocal= sessionmaker(autocommit=False,autoflush=False,bind=engine)
 
-Base=declarative_base()
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
+)
+if settings.database_url.startswith("sqlite"):
+
+    @event.listens_for(engine, "connect")
+    def enable_foreign_keys(connection, _):
+        connection.execute("PRAGMA foreign_keys=ON")
+
+
+SessionLocal = sessionmaker(bind=engine, autoflush=False)
+
 
 def get_db():
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         yield db
-    finally:
-        db.close()
-
-#connect to database using psycopg2
-# while True:
-#     try:
-#         conn=psycopg2.connect(host='localhost',database='fastapi',
-#         user='postgres',password='postgres',cursor_factory=RealDictCursor)
-#         cursor=conn.cursor()
-#         print("Database Connection Successful")
-#         break
-#     except Exception as error:
-#         print("Connecting to Database failed")
-#         print("Error: ", error)
-#         time.sleep(2)
